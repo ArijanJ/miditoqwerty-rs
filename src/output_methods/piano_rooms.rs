@@ -55,7 +55,7 @@ impl InputMethod for Inner {
         events
     }
 
-    fn reset(&mut self) {}
+    fn reset(&mut self, data: &str) {}
 
     fn process_sustain(&mut self, value: u8) -> KeyEvents {
         println!("[PianoRooms]: Processing sustain: {}", value);

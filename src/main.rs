@@ -42,18 +42,19 @@ struct Settings {
     output_method: Arc<Mutex<dyn InputMethod + Send>>,
     port: Option<MyPortInfo>,
     output: bool,
+    pv_velocity: bool
 }
 impl Settings {
     fn new(method: AvailableInputMethod) -> Self {
         match method {
             AvailableInputMethod::Generic => {
-                Self { output_method: Arc::new(Mutex::new(generic_inner::new())), port: None, output: true }
+                Self { output_method: Arc::new(Mutex::new(generic_inner::new())), port: None, output: true, pv_velocity: true }
             }
             AvailableInputMethod::PV => {
-                Self { output_method: Arc::new(Mutex::new(pv_inner::new())), port: None, output: true }
+                Self { output_method: Arc::new(Mutex::new(pv_inner::new())), port: None, output: true, pv_velocity: true }
             }
             AvailableInputMethod::PianoRooms => {
-                Self { output_method: Arc::new(Mutex::new(piano_rooms_inner)), port: None, output: true }
+                Self { output_method: Arc::new(Mutex::new(piano_rooms_inner)), port: None, output: true, pv_velocity: true }
             }
         }
     }
@@ -266,7 +267,7 @@ fn main() -> eframe::Result<()> {
             };
 
             egui::ComboBox::from_label("Output Method")
-                .selected_text(selected_output_method)
+                .selected_text(&selected_output_method)
                 .show_ui(ui, |ui| {
                     if ui.selectable_label(false, "Generic").on_hover_text("Basic QWERTY system, no 88-key or velocity support").clicked() {
                         let mut my_settings = settings.write().unwrap();
@@ -276,7 +277,12 @@ fn main() -> eframe::Result<()> {
                     if ui.selectable_label(false, "Piano Visualizations").on_hover_text("Uses control for 88-key and alt for velocity").clicked() {
                         let mut my_settings = settings.write().unwrap();
                         settings_update_tx.send(true).expect("Failed to update listener");
-                        my_settings.output_method = Arc::new(Mutex::new(pv_inner::new()))
+                        let velocity_info = match my_settings.pv_velocity {
+                            true => "velocity-on",
+                            false => "velocity-off"
+                        };
+                        my_settings.output_method = Arc::new(Mutex::new(pv_inner::new()));
+                        my_settings.output_method.lock().unwrap().reset(velocity_info);
                     }
                     if ui.selectable_label(false, "Piano Rooms").on_hover_text("Uses the custom numpad input system\nimplemented by Piano Rooms").clicked() {
                         let mut my_settings = settings.write().unwrap();
@@ -285,10 +291,22 @@ fn main() -> eframe::Result<()> {
                     }
                 });
 
+            if &selected_output_method == "Piano Visualizations" {
+                if ui.checkbox(&mut settings.write().unwrap().pv_velocity, "Use velocity (alt)").clicked() {
+                    settings_update_tx.send(true).expect("Failed to update listener");
+                    let my_settings = settings.write().unwrap();
+                    let info = match my_settings.pv_velocity {
+                        true => "velocity-on",
+                        false => "velocity-off"
+                    };
+                    my_settings.output_method.lock().unwrap().reset(info);
+                }
+            }
+
             if ui.checkbox(&mut settings.write().unwrap().output, "Enable output").clicked() {
                 settings_update_tx.send(true).expect("Failed to update listener");
                 let my_settings = settings.write().unwrap();
-                my_settings.output_method.lock().unwrap().reset();
+                my_settings.output_method.lock().unwrap().reset("");
             }
 
             // egui::ScrollArea::vertical().show(ui, |ui| {

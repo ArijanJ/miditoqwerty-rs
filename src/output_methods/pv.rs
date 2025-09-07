@@ -66,12 +66,13 @@ fn str_for_note(note: Note) -> Option<String> {
 
 pub struct Inner {
     pressed_chars: [u8; 127], // OS key codes [idx] -> times pressed [u8]
-    space_down: bool
+    space_down: bool,
+    velocity: bool
 }
 
 impl Inner {
     pub fn new() -> Self {
-        Inner {pressed_chars: [0; 127], space_down: false}
+        Inner {pressed_chars: [0; 127], space_down: false, velocity: true}
     }
 }
 
@@ -85,7 +86,9 @@ impl InputMethod for Inner {
         let mut events: KeyEvents = Vec::new();
         println!("[PV]: Playing note {} ({:?}) at velocity {}", note as u32, note, velocity);
 
-        events.append(&mut events_for_velocity(velocity));
+        if self.velocity {
+            events.append(&mut events_for_velocity(velocity));
+        }
 
         let is_88_key = note < Note::C2 || note > Note::C7;
         if is_88_key { events.push(KeyEvent::Press(Key::new("leftctrl"))) };
@@ -134,9 +137,10 @@ impl InputMethod for Inner {
         vec![KeyEvent::Release(keypress)]
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self, data: &str) {
         self.pressed_chars = [0; 127];
         self.space_down = false;
+        self.velocity = !data.starts_with("velocity-off");
     }
 
     fn process_sustain(&mut self, value: u8) -> KeyEvents {

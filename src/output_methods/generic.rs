@@ -84,7 +84,7 @@ impl InputMethod for Inner {
         vec![KeyEvent::Release(keypress)]
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self, data: &str) {
         self.pressed_chars = [0; 127];
         self.space_down = false;
     }
