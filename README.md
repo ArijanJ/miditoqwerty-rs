@@ -4,6 +4,10 @@ Simple MIDI input to QWERTY output tool for macOS, Linux, and Windows.
 
 Downloads can be found at https://github.com/ArijanJ/miditoqwerty-rs/releases
 
+## Sostenuto
+
+The app presses right bracket (`]`) if it detects sostenuto pedal input. Make sure you bind this button in your game/app if you wish to use a sostenuto pedal.
+
 ## Troubleshooting on macOS
 
 If you are on macOS and notes aren't being played but you are [sure your piano works](https://hardwaretester.com/midi), it's probably a permission issue.

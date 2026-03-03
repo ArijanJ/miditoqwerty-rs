@@ -75,4 +75,10 @@ impl InputMethod for Inner {
 
         events
     }
+
+    fn process_sostenuto(&mut self, value: u8) -> KeyEvents {
+        println!("[PianoRooms]: Processing sostenuto: {}", value);
+        // Piano Rooms uses a custom protocol; sostenuto not in original spec
+        vec![]
+    }
 }

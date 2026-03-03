@@ -100,6 +100,7 @@ fn midi_update_thread(midi: MidiInput, settings: &Arc<RwLock<Settings>>, keyboar
                             MidiEventType::Controller(control, value) => {
                                 match control {
                                     64 => { settings.try_read().unwrap().output_method.lock().unwrap().process_sustain(value) }
+                                    66 => { settings.try_read().unwrap().output_method.lock().unwrap().process_sostenuto(value) }
                                     other_control => { println!("Unknown control to set: {other_control}"); vec![] }
                                 }
                             }
