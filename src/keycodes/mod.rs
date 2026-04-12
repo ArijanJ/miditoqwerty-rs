@@ -18,7 +18,7 @@ pub static SHIFTS: phf::Map<&str, &str> = phf_map! {
 pub enum KeypressType {
     Release = 0,
     Press = 1,
-    Repeat = 2
+    Repeat = 2,
 }
 
 pub type KeyEvents = Vec<KeyEvent>;
@@ -26,7 +26,7 @@ pub type KeyEvents = Vec<KeyEvent>;
 #[derive(Debug, Clone)]
 pub enum KeyEvent {
     Press(Key),
-    Release(Key)
+    Release(Key),
 }
 impl KeyEvent {
     pub fn code(&self) -> u16 {
@@ -49,12 +49,15 @@ impl Key {
 
         let code = match unshifted {
             Some(key) => UniversalKeyCode::get(key),
-            None => UniversalKeyCode::get(s)
+            None => UniversalKeyCode::get(s),
         };
 
         match code {
             None => panic!("Invalid key-string supplied"),
-            Some(code) => { Key { code: code.try_into().unwrap(), shifted: unshifted.is_some() } }
+            Some(code) => Key {
+                code: code.try_into().unwrap(),
+                shifted: unshifted.is_some(),
+            },
         }
     }
 }

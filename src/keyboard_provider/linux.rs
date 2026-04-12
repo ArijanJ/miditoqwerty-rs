@@ -16,9 +16,12 @@ impl VirtualKeyboard {
 
         let mut device = device.expect("Failed to build device").build()?;
         let devnode = device
-            .enumerate_dev_nodes_blocking().unwrap()
+            .enumerate_dev_nodes_blocking()
+            .unwrap()
             .next() // Expect only one. Using fold or calling next again blocks indefinitely
-            .ok_or_else(|| io::Error::new(std::io::ErrorKind::NotFound, "devnode is not found"))??;
+            .ok_or_else(|| {
+                io::Error::new(std::io::ErrorKind::NotFound, "devnode is not found")
+            })??;
         println!("Created device {:#?}", devnode);
 
         Ok(VirtualKeyboard {
@@ -30,10 +33,18 @@ impl VirtualKeyboard {
     pub fn write_code(&mut self, event: KeyEvent) -> Result<(), io::Error> {
         match event {
             KeyEvent::Press(keypress) => {
-                self.device.emit(&[InputEvent::new(EventType::KEY, keypress.code, KeypressType::Press as i32)]);
+                self.device.emit(&[InputEvent::new(
+                    EventType::KEY,
+                    keypress.code,
+                    KeypressType::Press as i32,
+                )]);
             }
             KeyEvent::Release(keypress) => {
-                self.device.emit(&[InputEvent::new(EventType::KEY, keypress.code, KeypressType::Release as i32)]);
+                self.device.emit(&[InputEvent::new(
+                    EventType::KEY,
+                    keypress.code,
+                    KeypressType::Release as i32,
+                )]);
             }
         }
 

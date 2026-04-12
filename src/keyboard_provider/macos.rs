@@ -1,25 +1,28 @@
-use core_graphics::event::{CGEvent, CGEventType, CGEventFlags, CGEventTapLocation};
+use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, CGEventType};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
-use std::time::Duration;
 use std::thread::sleep;
+use std::time::Duration;
 
 use std::sync::{Arc, Mutex};
 
 use std::io;
 
 use super::VirtualKeyboard;
-use crate::keycodes::{KeyEvent, KeyEvents, KeypressType, Key};
+use crate::keycodes::{Key, KeyEvent, KeyEvents, KeypressType};
 
 impl VirtualKeyboard {
     pub fn new() -> Result<Self, io::Error> {
-        Ok(VirtualKeyboard { modifiers: (false, false, false) })
+        Ok(VirtualKeyboard {
+            modifiers: (false, false, false),
+        })
     }
 
     pub fn write_code(&mut self, event: KeyEvent) -> Result<(), io::Error> {
         //println!("mac event: {:?}", event);
         let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
 
-        if event.code() == Key::new("shift").code { // shift
+        if event.code() == Key::new("shift").code {
+            // shift
             match event {
                 KeyEvent::Press(keypress) => {
                     self.modifiers.0 = true;
@@ -32,7 +35,8 @@ impl VirtualKeyboard {
             //println!("shifting: {:?}", self.modifiers);
             // return Ok(());
         }
-        if event.code() == Key::new("leftalt").code { // alt
+        if event.code() == Key::new("leftalt").code {
+            // alt
             match event {
                 KeyEvent::Press(keypress) => {
                     self.modifiers.1 = true;
@@ -45,7 +49,8 @@ impl VirtualKeyboard {
             //println!("alting: {:?}", self.modifiers);
             // return Ok(());
         }
-        if event.code() == Key::new("leftctrl").code { // ctrl
+        if event.code() == Key::new("leftctrl").code {
+            // ctrl
             match event {
                 KeyEvent::Press(keypress) => {
                     self.modifiers.2 = true;

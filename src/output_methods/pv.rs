@@ -1,4 +1,5 @@
-pub const REGULAR_VP_NOTES: &[u8] = "1!2@34$5%6^78*9(0qQwWeErtTyYuiIoOpPasSdDfgGhHjJklLzZxcCvVbBnm".as_bytes();
+pub const REGULAR_VP_NOTES: &[u8] =
+    "1!2@34$5%6^78*9(0qQwWeErtTyYuiIoOpPasSdDfgGhHjJklLzZxcCvVbBnm".as_bytes();
 pub const LOW_VP_NOTES: &[u8] = "trewq0987654321".as_bytes();
 pub const HIGH_VP_NOTES: &[u8] = "yuiopasdfghj".as_bytes();
 
@@ -6,19 +7,13 @@ use midi_event::Note;
 
 use crate::keycodes::KeyEvent;
 
-use super::{KeyEvents, InputMethod, Key};
+use super::{InputMethod, Key, KeyEvents};
 
 pub fn string_for_velocity(velocity: u8) -> String {
     const VELOCITY_KEYS: &[u8] = "1234567890qwertyuiopasdfghjklzxc".as_bytes();
     const VELOCITY_LIST: [u8; 32] = [
-        4, 8, 12, 16,
-        20, 24, 28, 32,
-        36, 40, 44, 48,
-        52, 56, 60, 64,
-        68, 72, 76, 80,
-        84, 88, 92, 96,
-        100, 104, 108, 112,
-        116, 120, 124, 127,
+        4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92,
+        96, 100, 104, 108, 112, 116, 120, 124, 127,
     ];
 
     let (index, closest) = VELOCITY_LIST
@@ -54,13 +49,26 @@ fn str_for_note(note: Note) -> Option<String> {
     let note_value = note as usize;
 
     if note < Note::C2 {
-        Some((*LOW_VP_NOTES.get((note as i8 - Note::B1 as i8).abs() as usize).unwrap() as char).to_string())
-    }
-    else if note > Note::C7 {
-        Some((*HIGH_VP_NOTES.get((note as i8 - Note::Cs7 as i8).abs() as usize).unwrap() as char).to_string())
-    }
-    else {
-        Some((*REGULAR_VP_NOTES.get(note as usize - Note::C2 as usize).unwrap() as char).to_string())
+        Some(
+            (*LOW_VP_NOTES
+                .get((note as i8 - Note::B1 as i8).abs() as usize)
+                .unwrap() as char)
+                .to_string(),
+        )
+    } else if note > Note::C7 {
+        Some(
+            (*HIGH_VP_NOTES
+                .get((note as i8 - Note::Cs7 as i8).abs() as usize)
+                .unwrap() as char)
+                .to_string(),
+        )
+    } else {
+        Some(
+            (*REGULAR_VP_NOTES
+                .get(note as usize - Note::C2 as usize)
+                .unwrap() as char)
+                .to_string(),
+        )
     }
 }
 
@@ -68,15 +76,19 @@ pub struct Inner {
     pressed_chars: [u8; 127], // OS key codes [idx] -> times pressed [u8]
     space_down: bool,
     sostenuto_down: bool,
-    velocity: bool
+    velocity: bool,
 }
 
 impl Inner {
     pub fn new() -> Self {
-        Inner {pressed_chars: [0; 127], space_down: false, sostenuto_down: false, velocity: true}
+        Inner {
+            pressed_chars: [0; 127],
+            space_down: false,
+            sostenuto_down: false,
+            velocity: true,
+        }
     }
 }
-
 
 impl InputMethod for Inner {
     fn get_name(&self) -> String {
@@ -85,14 +97,19 @@ impl InputMethod for Inner {
 
     fn press_note(&mut self, note: Note, velocity: u8) -> KeyEvents {
         let mut events: KeyEvents = Vec::new();
-        println!("[PV]: Playing note {} ({:?}) at velocity {}", note as u32, note, velocity);
+        println!(
+            "[PV]: Playing note {} ({:?}) at velocity {}",
+            note as u32, note, velocity
+        );
 
         if self.velocity {
             events.append(&mut events_for_velocity(velocity));
         }
 
         let is_88_key = note < Note::C2 || note > Note::C7;
-        if is_88_key { events.push(KeyEvent::Press(Key::new("leftctrl"))) };
+        if is_88_key {
+            events.push(KeyEvent::Press(Key::new("leftctrl")))
+        };
 
         let keystring = str_for_note(note).unwrap();
         let keypress = Key::new(&keystring); // meta / for info
@@ -100,12 +117,18 @@ impl InputMethod for Inner {
         // Release just to make sure that we can actually play it again
         events.push(KeyEvent::Release(Key::new(&keystring)));
 
-        if keypress.shifted { events.push(KeyEvent::Press(Key::new("shift"))) };
+        if keypress.shifted {
+            events.push(KeyEvent::Press(Key::new("shift")))
+        };
         events.push(KeyEvent::Press(Key::new(&keystring)));
         self.pressed_chars[keypress.code as usize] += 1;
-        if keypress.shifted { events.push(KeyEvent::Release(Key::new("shift"))) };
+        if keypress.shifted {
+            events.push(KeyEvent::Release(Key::new("shift")))
+        };
 
-        if is_88_key { events.push(KeyEvent::Release(Key::new("leftctrl"))) };
+        if is_88_key {
+            events.push(KeyEvent::Release(Key::new("leftctrl")))
+        };
 
         events
     }
@@ -119,7 +142,8 @@ impl InputMethod for Inner {
         if key_string.is_none() {
             println!("[Generic]: Impossible to press note {:?} with PV", note);
             return vec![];
-        } let key_string = key_string.unwrap();
+        }
+        let key_string = key_string.unwrap();
 
         let keypress = Key::new(&key_string);
 

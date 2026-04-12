@@ -15,10 +15,10 @@ struct KeyboardProvider {}
 
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 #[cfg(target_os = "linux")]
 pub struct VirtualKeyboard {
@@ -33,8 +33,8 @@ pub struct VirtualKeyboard {}
 #[cfg(target_os = "macos")]
 pub struct VirtualKeyboard {
     pub modifiers: (bool, bool, bool), // 1=shift, 2=alt. TODO enum(?) later
-    // source: Arc<Mutex<CGEventSource>>
-}   // whatever, just create new ones
+                                       // source: Arc<Mutex<CGEventSource>>
+} // whatever, just create new ones
 
 impl std::fmt::Debug for VirtualKeyboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

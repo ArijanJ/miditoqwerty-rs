@@ -1,10 +1,13 @@
 use midi_event::Note;
 
 use super::Key;
-use crate::{output_methods::InputMethod, keycodes::{KeyEvent, KeyEvents}};
+use crate::{
+    keycodes::{KeyEvent, KeyEvents},
+    output_methods::InputMethod,
+};
 
 const PIANO_ROOMS_KEYS: [&str; 12] = [
-    "kp0", "kp1", "kp2", "kp3", "kp4", "kp5", "kp6", "kp7", "kp8", "kp9", "kpminus", "kpplus"
+    "kp0", "kp1", "kp2", "kp3", "kp4", "kp5", "kp6", "kp7", "kp8", "kp9", "kpminus", "kpplus",
 ];
 
 pub struct Inner;
@@ -15,7 +18,10 @@ impl InputMethod for Inner {
     }
 
     fn press_note(&mut self, note: Note, velocity: u8) -> KeyEvents {
-        println!("[PianoRooms]: Playing note {:?} at velocity {}", note, velocity);
+        println!(
+            "[PianoRooms]: Playing note {:?} at velocity {}",
+            note, velocity
+        );
 
         // original code:
         //      Array = ['num0', 'numpad1', 'numpad2', 'numpad3', 'numpad4', 'numpad5', 'numpad6', 'numpad7', 'numpad8', 'numpad9', 'subtract', 'add']
@@ -24,12 +30,19 @@ impl InputMethod for Inner {
 
         let mut events: KeyEvents = vec![
             KeyEvent::Press(Key::new("kpasterisk")),
-            KeyEvent::Release(Key::new("kpasterisk"))
+            KeyEvent::Release(Key::new("kpasterisk")),
         ];
 
-        let to_send: Vec<u8> = vec![note as u8 / 12, note as u8 % 12, velocity / 12, velocity % 12];
+        let to_send: Vec<u8> = vec![
+            note as u8 / 12,
+            note as u8 % 12,
+            velocity / 12,
+            velocity % 12,
+        ];
         to_send.iter().for_each(|num| {
-            let key = PIANO_ROOMS_KEYS.get(*num as usize).expect("Invalid Piano Rooms key");
+            let key = PIANO_ROOMS_KEYS
+                .get(*num as usize)
+                .expect("Invalid Piano Rooms key");
             events.push(KeyEvent::Press(Key::new(key)));
             events.push(KeyEvent::Release(Key::new(key)));
         });
@@ -42,12 +55,14 @@ impl InputMethod for Inner {
 
         let mut events: KeyEvents = vec![
             KeyEvent::Press(Key::new("kpasterisk")),
-            KeyEvent::Release(Key::new("kpasterisk"))
+            KeyEvent::Release(Key::new("kpasterisk")),
         ];
 
         let to_send: Vec<u8> = vec![note as u8 / 12, note as u8 % 12, 0, 0];
         to_send.iter().for_each(|num| {
-            let key = PIANO_ROOMS_KEYS.get(*num as usize).expect("Invalid Piano Rooms key");
+            let key = PIANO_ROOMS_KEYS
+                .get(*num as usize)
+                .expect("Invalid Piano Rooms key");
             events.push(KeyEvent::Press(Key::new(key)));
             events.push(KeyEvent::Release(Key::new(key)));
         });
@@ -62,13 +77,15 @@ impl InputMethod for Inner {
 
         let mut events: KeyEvents = vec![
             KeyEvent::Press(Key::new("kpasterisk")),
-            KeyEvent::Release(Key::new("kpasterisk"))
+            KeyEvent::Release(Key::new("kpasterisk")),
         ];
 
         let control = 143;
         let to_send: Vec<u8> = vec![control / 12, control % 12, value / 12, value % 12];
         to_send.iter().for_each(|num| {
-            let key = PIANO_ROOMS_KEYS.get(*num as usize).expect("Invalid Piano Rooms key");
+            let key = PIANO_ROOMS_KEYS
+                .get(*num as usize)
+                .expect("Invalid Piano Rooms key");
             events.push(KeyEvent::Press(Key::new(key)));
             events.push(KeyEvent::Release(Key::new(key)));
         });
