@@ -3,16 +3,21 @@ use midi_event::Note;
 use super::Key;
 use crate::{
     keycodes::{KeyEvent, KeyEvents},
-    output_methods::InputMethod,
+    output_methods::OutputMethod,
 };
 
 const PIANO_ROOMS_KEYS: [&str; 12] = [
     "kp0", "kp1", "kp2", "kp3", "kp4", "kp5", "kp6", "kp7", "kp8", "kp9", "kpminus", "kpplus",
 ];
 
-pub struct Inner;
+pub struct Inner {}
+impl Inner {
+    pub fn new() -> Self {
+        Inner {}
+    }
+}
 
-impl InputMethod for Inner {
+impl OutputMethod for Inner {
     fn get_name(&self) -> String {
         "Piano Rooms".to_owned()
     }

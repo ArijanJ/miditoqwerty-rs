@@ -1,21 +1,31 @@
-pub const REGULAR_VP_NOTES: &[u8] =
-    "1!2@34$5%6^78*9(0qQwWeErtTyYuiIoOpPasSdDfgGhHjJklLzZxcCvVbBnm".as_bytes();
+pub const REGULAR_VP_NOTES: [u8; 61] =
+    *b"1!2@34$5%6^78*9(0qQwWeErtTyYuiIoOpPasSdDfgGhHjJklLzZxcCvVbBnm";
 
 use midi_event::Note;
+use serde::{Deserialize, Serialize};
 
-use super::InputMethod;
+use super::OutputMethod;
 use crate::keycodes::{Key, KeyEvent, KeyEvents};
 
-fn str_for_note(note: Note) -> Option<String> {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GenericKeymap {
+    pub keys: String,
+    pub sustain: String,
+}
+impl std::default::Default for GenericKeymap {
+    fn default() -> Self {
+        Self {
+            keys: String::from_utf8_lossy(&REGULAR_VP_NOTES).to_string(),
+            sustain: "space".to_string(),
+        }
+    }
+}
+
+fn str_for_note(key_cache: &[u8; 61], note: Note) -> Option<String> {
     let note_value = note as usize;
 
     if note >= Note::C2 && note <= Note::C7 {
-        Some(
-            (*REGULAR_VP_NOTES
-                .get(note as usize - Note::C2 as usize)
-                .unwrap() as char)
-                .to_string(),
-        )
+        Some((*key_cache.get(note as usize - Note::C2 as usize).unwrap() as char).to_string())
     } else {
         None
     }
@@ -23,21 +33,30 @@ fn str_for_note(note: Note) -> Option<String> {
 
 pub struct Inner {
     pressed_chars: [u8; 127], // OS key codes [idx] -> times pressed [u8]
-    space_down: bool,
+    sustain_down: bool,
     sostenuto_down: bool,
+    keymap: GenericKeymap,
+    key_cache: [u8; 61], // Keymap string into u8 array
 }
 
 impl Inner {
-    pub fn new() -> Self {
+    pub fn new(keymap: Option<GenericKeymap>) -> Self {
+        let keymap = keymap.unwrap();
         Inner {
             pressed_chars: [0; 127],
-            space_down: false,
+            sustain_down: false,
             sostenuto_down: false,
+            key_cache: keymap
+                .keys
+                .as_bytes()
+                .try_into()
+                .expect("Invalid keymap supplied"),
+            keymap,
         }
     }
 }
 
-impl InputMethod for Inner {
+impl OutputMethod for Inner {
     fn get_name(&self) -> String {
         "Generic".to_owned()
     }
@@ -49,7 +68,7 @@ impl InputMethod for Inner {
             note as u32, note, velocity
         );
 
-        let key_string = str_for_note(note);
+        let key_string = str_for_note(&self.key_cache, note);
 
         if key_string.is_none() {
             println!(
@@ -82,7 +101,7 @@ impl InputMethod for Inner {
         let events: KeyEvents = vec![];
         println!("[Generic]: Releasing note: {} ({:?})", note as u32, note);
 
-        let key_string = str_for_note(note);
+        let key_string = str_for_note(&self.key_cache, note);
 
         if key_string.is_none() {
             println!(
@@ -112,19 +131,19 @@ impl InputMethod for Inner {
 
     fn reset(&mut self, data: &str) {
         self.pressed_chars = [0; 127];
-        self.space_down = false;
+        self.sustain_down = false;
         self.sostenuto_down = false;
     }
 
     fn process_sustain(&mut self, value: u8) -> KeyEvents {
         println!("[Generic]: Processing sustain: {}", value);
 
-        if value >= 64 && !self.space_down {
-            self.space_down = true;
-            vec![KeyEvent::Press(Key::new("space"))]
-        } else if value < 64 && self.space_down {
-            self.space_down = false;
-            vec![KeyEvent::Release(Key::new("space"))]
+        if value >= 64 && !self.sustain_down {
+            self.sustain_down = true;
+            vec![KeyEvent::Press(Key::new(&self.keymap.sustain))]
+        } else if value < 64 && self.sustain_down {
+            self.sustain_down = false;
+            vec![KeyEvent::Release(Key::new(&self.keymap.sustain))]
         } else {
             vec![]
         }

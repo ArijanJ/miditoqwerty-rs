@@ -13,6 +13,8 @@ midi-event = "0.2.1"
 midir = "0.10.0"
 winapi = { version = "0.3", features = ["winuser"] }
 phf = { version = "0.11", features = ["macros"] }
+serde = { version = "1.0.152", features = ["derive"] }
+confy = "2.0.0"
 
 [profile.release]
 opt-level = 'z'
@@ -28,4 +30,4 @@ core-graphics = "0.24.0"
 [package.metadata.bundle]
 name = "Midi to Qwerty"
 identifier = "dev.arijanj.miditoqwerty"
-version = "1.0"
+version = "1.6"

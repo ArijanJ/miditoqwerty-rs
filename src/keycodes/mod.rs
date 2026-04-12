@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use phf::phf_map;
+use serde::{Deserialize, Serialize};
 
 pub static SHIFTS: phf::Map<&str, &str> = phf_map! {
     "!" => "1", "A" => "a", "K" => "k", "U" => "u",
@@ -37,7 +38,7 @@ impl KeyEvent {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Key {
     pub code: u16,
     pub shifted: bool,
@@ -59,6 +60,18 @@ impl Key {
                 shifted: unshifted.is_some(),
             },
         }
+    }
+
+    pub fn exists(s: &str) -> bool {
+        println!("Testing {s}");
+        let unshifted = SHIFTS.get(s);
+
+        let code = match unshifted {
+            Some(key) => UniversalKeyCode::get(key),
+            None => UniversalKeyCode::get(s),
+        };
+
+        code.is_some()
     }
 }
 

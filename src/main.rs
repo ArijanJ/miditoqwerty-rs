@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex, RwLock},
@@ -5,29 +7,35 @@ use std::{
 };
 
 use eframe::egui;
-use egui::Style;
+use egui::{Color32, Style};
 use keyboard_provider::VirtualKeyboard;
 use keycodes::{Key, KeyEvent, KeyEvents};
 use midir::{Ignore, MidiInput, MidiInputPort};
-use output_methods::InputMethod;
+use output_methods::OutputMethod;
+use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 
-use output_methods::unified::generic_inner;
+use output_methods::unified::generic;
 use output_methods::unified::piano_rooms_inner;
 use output_methods::unified::pv_inner;
+
+use output_methods::unified::GenericKeymap;
 
 mod keycodes;
 mod output_methods;
 
 use midi_event::{self, MidiEventType, Parse};
 
+use crate::output_methods::generic::REGULAR_VP_NOTES;
+
 mod keyboard_provider;
 
 #[allow(dead_code)] // used for comparisons
-enum AvailableInputMethod {
-    Generic,
+#[derive(Serialize, Deserialize, Clone)]
+enum AvailableOutputMethod {
+    Generic(Option<GenericKeymap>),
     PV,
-    PianoRooms, // and this one is never traditionally constructed
+    PianoRooms,
 }
 
 #[derive(Clone)]
@@ -41,33 +49,51 @@ impl Debug for MyPortInfo {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct SavedConfig {
+    pub preferred_port_name: Option<String>,
+    pub preferred_output_method: AvailableOutputMethod,
+    pub saved_generic_keymap: GenericKeymap,
+}
+impl ::std::default::Default for SavedConfig {
+    fn default() -> Self {
+        Self {
+            preferred_port_name: None,
+            preferred_output_method: AvailableOutputMethod::Generic(Some(GenericKeymap {
+                ..Default::default()
+            })),
+            saved_generic_keymap: GenericKeymap {
+                ..Default::default()
+            },
+        }
+    }
+}
+
 struct Settings {
-    output_method: Arc<Mutex<dyn InputMethod + Send>>,
+    output_method: Arc<Mutex<dyn OutputMethod + Send>>,
     port: Option<MyPortInfo>,
     output: bool,
     pv_velocity: bool,
 }
 impl Settings {
-    fn new(method: AvailableInputMethod) -> Self {
-        match method {
-            AvailableInputMethod::Generic => Self {
-                output_method: Arc::new(Mutex::new(generic_inner::new())),
-                port: None,
-                output: true,
-                pv_velocity: true,
-            },
-            AvailableInputMethod::PV => Self {
-                output_method: Arc::new(Mutex::new(pv_inner::new())),
-                port: None,
-                output: true,
-                pv_velocity: true,
-            },
-            AvailableInputMethod::PianoRooms => Self {
-                output_method: Arc::new(Mutex::new(piano_rooms_inner)),
-                port: None,
-                output: true,
-                pv_velocity: true,
-            },
+    fn with_output_method(method: AvailableOutputMethod) -> Self {
+        let output_method: Arc<Mutex<dyn OutputMethod + Send>> = match method {
+            AvailableOutputMethod::Generic(keymap) => {
+                let unwrapped = keymap.unwrap();
+                Arc::new(Mutex::new(generic::Inner::new(Some(GenericKeymap {
+                    keys: unwrapped.keys,
+                    sustain: unwrapped.sustain,
+                }))))
+            }
+            AvailableOutputMethod::PV => Arc::new(Mutex::new(pv_inner::new())),
+            AvailableOutputMethod::PianoRooms => Arc::new(Mutex::new(piano_rooms_inner::new())),
+        };
+
+        Self {
+            output_method,
+            port: None,
+            output: true,
+            pv_velocity: true,
         }
     }
     fn set_port(mut self, port: MyPortInfo) -> Self {
@@ -200,11 +226,13 @@ fn main() -> eframe::Result<()> {
     let virtual_keyboard = keyboard_provider::create_virtual_keyboard();
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([400.0, 180.0]),
         ..Default::default()
     };
 
-    // let mut logs: Vec<String> = Vec::new();
+    let config: Arc<RwLock<SavedConfig>> = Arc::new(RwLock::new(
+        confy::load("miditoqwerty-rs", None).expect("Failed to load configuration"),
+    ));
 
     let mut midi_in =
         MidiInput::new("miditoqwerty input reader").expect("Failed to create MidiInput");
@@ -298,12 +326,25 @@ fn main() -> eframe::Result<()> {
     println!("Available ports: {:?}", ports.read().unwrap());
 
     let settings = Arc::new(RwLock::new(
-        Settings::new(AvailableInputMethod::Generic).set_port({
-            let port = first_port.read().unwrap().port.clone();
-            let name = meta_midi_in.port_name(&port).unwrap();
-            MyPortInfo { port, name }
-        }),
+        Settings::with_output_method(config.read().unwrap().preferred_output_method.clone())
+            .set_port({
+                let port = first_port.read().unwrap().port.clone();
+                let name = meta_midi_in.port_name(&port).unwrap();
+                MyPortInfo { port, name }
+            }),
     ));
+
+    // Select port from saved config
+    let port_name_option = config.read().unwrap().preferred_port_name.clone();
+    if let Some(desired_port_name) = port_name_option {
+        let ports = ports.read().unwrap();
+        if let Some(port) = ports.iter().find(|&port| port.name == desired_port_name) {
+            let mut my_settings = settings.write().unwrap();
+            my_settings.port = Some(port.clone());
+        } else {
+            println!("Configured port was not found, first will be used")
+        };
+    }
 
     // If anything is transmitted to this receiver, midi_update_thread restarts the MIDI connection with the new &settings
     let (settings_update_tx, settings_update_rx): (mpsc::Sender<bool>, mpsc::Receiver<bool>) =
@@ -322,6 +363,18 @@ fn main() -> eframe::Result<()> {
     });
 
     let settings = Arc::clone(&settings);
+
+    let update_settings = move || {
+        settings_update_tx
+            .send(true)
+            .expect("Failed to update listener");
+    };
+
+    let mut generic_keymap_string = config.read().unwrap().saved_generic_keymap.keys.clone();
+    let mut generic_keymap_string_valid = true;
+    let mut sustain_keymap_string = config.read().unwrap().saved_generic_keymap.sustain.clone();
+    let mut sustain_keymap_string_valid = true;
+
     let mut did_style = false;
     eframe::run_simple_native("Midi to Qwerty", options, move |ctx, _frame| {
         if !did_style {
@@ -335,8 +388,6 @@ fn main() -> eframe::Result<()> {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Midi to Qwerty");
-
             let selected_midi_port_name = settings.read().unwrap().port.clone().unwrap().name;
             egui::ComboBox::from_label("MIDI Input")
                 .selected_text(selected_midi_port_name)
@@ -359,42 +410,51 @@ fn main() -> eframe::Result<()> {
                                 port: port.clone(),
                                 name: port_name.clone(),
                             });
-                            settings_update_tx
-                                .send(true)
-                                .expect("Failed to update listener");
+                            update_settings();
+                            config.write().unwrap().preferred_port_name = Some(port_name.clone());
+
+                            confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                                .expect("Failed to store configuration");
                         }
                     }
                 });
 
-            let selected_output_method = {
+            let selected_output_method_name = {
                 let settings_read = settings.try_read().unwrap();
                 let output_method = settings_read.output_method.lock().unwrap();
                 output_method.get_name()
             };
 
             egui::ComboBox::from_label("Output Method")
-                .selected_text(&selected_output_method)
+                .selected_text(&selected_output_method_name)
                 .show_ui(ui, |ui| {
                     if ui
                         .selectable_label(false, "Generic")
                         .on_hover_text("Basic QWERTY system, no 88-key or velocity support")
                         .clicked()
                     {
-                        let mut my_settings = settings.write().unwrap();
-                        settings_update_tx
-                            .send(true)
-                            .expect("Failed to update listener");
-                        my_settings.output_method = Arc::new(Mutex::new(generic_inner::new()))
+                        update_settings();
+
+                        let new_keymap = GenericKeymap {
+                            keys: generic_keymap_string.to_string(),
+                            sustain: sustain_keymap_string.to_string(),
+                        };
+
+                        settings.write().unwrap().output_method =
+                            Arc::new(Mutex::new(generic::Inner::new(Some(new_keymap.clone()))));
+
+                        config.write().unwrap().preferred_output_method =
+                            AvailableOutputMethod::Generic(Some(new_keymap.clone()));
+                        confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                            .expect("Failed to store configuration");
                     }
                     if ui
                         .selectable_label(false, "Piano Visualizations")
                         .on_hover_text("Uses control for 88-key and alt for velocity")
                         .clicked()
                     {
+                        update_settings();
                         let mut my_settings = settings.write().unwrap();
-                        settings_update_tx
-                            .send(true)
-                            .expect("Failed to update listener");
                         let velocity_info = match my_settings.pv_velocity {
                             true => "velocity-on",
                             false => "velocity-off",
@@ -405,6 +465,10 @@ fn main() -> eframe::Result<()> {
                             .lock()
                             .unwrap()
                             .reset(velocity_info);
+
+                        config.write().unwrap().preferred_output_method = AvailableOutputMethod::PV;
+                        confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                            .expect("Failed to store configuration");
                     }
                     if ui
                         .selectable_label(false, "Piano Rooms")
@@ -413,15 +477,19 @@ fn main() -> eframe::Result<()> {
                         )
                         .clicked()
                     {
-                        let mut my_settings = settings.write().unwrap();
-                        settings_update_tx
-                            .send(true)
-                            .expect("Failed to update listener");
-                        my_settings.output_method = Arc::new(Mutex::new(piano_rooms_inner))
+                        update_settings();
+
+                        settings.write().unwrap().output_method =
+                            Arc::new(Mutex::new(piano_rooms_inner::new()));
+
+                        config.write().unwrap().preferred_output_method =
+                            AvailableOutputMethod::PianoRooms;
+                        confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                            .expect("Failed to store configuration");
                     }
                 });
 
-            if &selected_output_method == "Piano Visualizations" {
+            if &selected_output_method_name == "Piano Visualizations" {
                 if ui
                     .checkbox(
                         &mut settings.write().unwrap().pv_velocity,
@@ -429,9 +497,7 @@ fn main() -> eframe::Result<()> {
                     )
                     .clicked()
                 {
-                    settings_update_tx
-                        .send(true)
-                        .expect("Failed to update listener");
+                    update_settings();
                     let my_settings = settings.write().unwrap();
                     let info = match my_settings.pv_velocity {
                         true => "velocity-on",
@@ -445,18 +511,110 @@ fn main() -> eframe::Result<()> {
                 .checkbox(&mut settings.write().unwrap().output, "Enable output")
                 .clicked()
             {
-                settings_update_tx
-                    .send(true)
-                    .expect("Failed to update listener");
+                update_settings();
                 let my_settings = settings.write().unwrap();
                 my_settings.output_method.lock().unwrap().reset("");
             }
 
-            // egui::ScrollArea::vertical().show(ui, |ui| {
-            //     for log in logs.iter() {
-            //         ui.label(log);
-            //     }
-            // })
+            if &selected_output_method_name == "Generic" {
+                ui.collapsing("Edit keymap", |ui| {
+                    ui.horizontal(|ui| {
+                        let text_edit_response = ui.add(
+                            egui::TextEdit::singleline(&mut generic_keymap_string).text_color(
+                                if generic_keymap_string_valid {
+                                    Color32::GREEN
+                                } else {
+                                    Color32::RED
+                                },
+                            ),
+                        );
+                        if text_edit_response.changed() {
+                            generic_keymap_string_valid = generic_keymap_string.len() == 61;
+
+                            if generic_keymap_string_valid {
+                                let new_keymap = GenericKeymap {
+                                    keys: generic_keymap_string.to_string(),
+                                    sustain: sustain_keymap_string.to_string(),
+                                };
+
+                                update_settings();
+                                let mut my_settings = settings.write().unwrap();
+
+                                my_settings.output_method = Arc::new(Mutex::new(
+                                    generic::Inner::new(Some(new_keymap.clone())),
+                                ));
+
+                                config.write().unwrap().preferred_output_method =
+                                    AvailableOutputMethod::Generic(Some(new_keymap.clone()));
+                                config.write().unwrap().saved_generic_keymap = new_keymap.clone();
+                                confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                                    .expect("Failed to store configuration");
+                            }
+                        }
+
+                        if ui.button("Reset").clicked() {
+                            generic_keymap_string =
+                                String::from_utf8_lossy(&REGULAR_VP_NOTES).to_string();
+                            generic_keymap_string_valid = true;
+
+                            sustain_keymap_string = "space".to_string();
+                            sustain_keymap_string_valid = true;
+
+                            let mut my_settings = settings.write().unwrap();
+                            let new_keymap = GenericKeymap {
+                                keys: String::from_utf8_lossy(&REGULAR_VP_NOTES).to_string(),
+                                sustain: "space".to_string(),
+                            };
+
+                            my_settings.output_method =
+                                Arc::new(Mutex::new(generic::Inner::new(Some(new_keymap.clone()))));
+
+                            config.write().unwrap().preferred_output_method =
+                                AvailableOutputMethod::Generic(Some(new_keymap.clone()));
+                            config.write().unwrap().saved_generic_keymap = new_keymap.clone();
+                            confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                                .expect("Failed to store configuration");
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Sustain:");
+                        let sustain_text_edit_response = ui.add(
+                            egui::TextEdit::singleline(&mut sustain_keymap_string).text_color(
+                                if sustain_keymap_string_valid {
+                                    Color32::GREEN
+                                } else {
+                                    Color32::RED
+                                },
+                            ),
+                        );
+
+                        if sustain_text_edit_response.changed() {
+                            println!("sustain changed to: {}", sustain_keymap_string);
+                            sustain_keymap_string_valid = Key::exists(&sustain_keymap_string);
+
+                            if sustain_keymap_string_valid {
+                                update_settings();
+
+                                let mut my_settings = settings.write().unwrap();
+                                let new_keymap = GenericKeymap {
+                                    keys: generic_keymap_string.to_string(),
+                                    sustain: sustain_keymap_string.to_string(),
+                                };
+
+                                my_settings.output_method = Arc::new(Mutex::new(
+                                    generic::Inner::new(Some(new_keymap.clone())),
+                                ));
+
+                                config.write().unwrap().preferred_output_method =
+                                    AvailableOutputMethod::Generic(Some(new_keymap.clone()));
+                                config.write().unwrap().saved_generic_keymap = new_keymap.clone();
+                                confy::store("miditoqwerty-rs", None, &(*config.read().unwrap()))
+                                    .expect("Failed to store configuration");
+                            }
+                        }
+                    });
+                });
+            }
         });
     })
 }

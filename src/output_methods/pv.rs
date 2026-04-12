@@ -7,7 +7,7 @@ use midi_event::Note;
 
 use crate::keycodes::KeyEvent;
 
-use super::{InputMethod, Key, KeyEvents};
+use super::{Key, KeyEvents, OutputMethod};
 
 pub fn string_for_velocity(velocity: u8) -> String {
     const VELOCITY_KEYS: &[u8] = "1234567890qwertyuiopasdfghjklzxc".as_bytes();
@@ -90,7 +90,7 @@ impl Inner {
     }
 }
 
-impl InputMethod for Inner {
+impl OutputMethod for Inner {
     fn get_name(&self) -> String {
         "Piano Visualizations".to_owned()
     }

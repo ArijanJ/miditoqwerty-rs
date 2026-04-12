@@ -5,11 +5,11 @@ use midi_event::Note;
 
 use crate::keycodes::{Key, KeyEvents};
 
-mod generic;
+pub mod generic;
 mod piano_rooms;
 mod pv;
 
-pub trait InputMethod {
+pub trait OutputMethod {
     fn get_name(&self) -> String;
     fn press_note(&mut self, note: Note, velocity: u8) -> KeyEvents;
     fn release_note(&mut self, note: Note) -> KeyEvents;
@@ -19,7 +19,8 @@ pub trait InputMethod {
 }
 
 pub mod unified {
-    pub use super::generic::Inner as generic_inner;
+    pub use super::generic;
+    pub use super::generic::GenericKeymap;
     pub use super::piano_rooms::Inner as piano_rooms_inner;
     pub use super::pv::Inner as pv_inner;
 }
